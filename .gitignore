@@ -3,7 +3,7 @@
 *.wpo
 *.o
 *.boot
-kunabi
+gherkin-kunabi
 kunabi_program.h
 kunabi-all.so
 

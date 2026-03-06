@@ -34,7 +34,7 @@ compile: gherkin
 build: binary
 
 # Native binary
-binary: clean gherkin
+binary: clean deps gherkin compile
 	$(SCHEME) -q --libdirs $(LIBDIRS) --program build-binary.ss
 
 # Run interpreted

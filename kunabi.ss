@@ -1,7 +1,7 @@
 #!chezscheme
 ;; Entry point for gherkin-ober
 (import (chezscheme)
-        (ober main))
+        (ober kunabi-main))
 
 ;; Get args from KUNABI_ARGC/KUNABI_ARGn env vars (set by kunabi-main.c)
 ;; or fall back to (command-line) for interpreted mode.

@@ -90,11 +90,25 @@
       (format "~a/reader/reader.so" gherkin-dir)
       (format "~a/compiler/compile.so" gherkin-dir)
       (format "~a/boot/gherkin.so" gherkin-dir)
+      (format "~a/compat/std-sync-channel.so" gherkin-dir)
+      (format "~a/compat/std-srfi-19.so" gherkin-dir)
+      (format "~a/compat/std-getopt.so" gherkin-dir)
+      (format "~a/compat/std-srfi-13.so" gherkin-dir)
+      (format "~a/compat/std-text-base64.so" gherkin-dir)
+      (format "~a/compat/std-crypto-digest.so" gherkin-dir)
     )
     (map (lambda (m) (format "src/compat/~a.so" m))
-      '(json sugar process format pregexp sort getopt misc gambit))
+      '(json sugar process format pregexp sort getopt misc gambit wg))
+    (map (lambda (m) (format "src/clan/~a.so" m))
+      '(db-leveldb text-yaml))
+    (list (format "~a/mine/chez-leveldb/leveldb.so" (getenv "HOME")))
+    (map (lambda (m) (format "gherkin-aws/src/compat/~a.so" m))
+      '(request uri sigv4))
+    (map (lambda (m) (format "gherkin-aws/src/gerbil-aws/~a.so" m))
+      '(aws-creds s3-xml s3-api s3-objects))
     (map (lambda (m) (format "src/ober/~a.so" m))
-      '(kunabi older-kunabi kunabi-main kunabi-vpc kunabi-sqlite kunabi-leveldb kunabi-cloudtrail build-binary kunabi main gui-main billing loader parser detection storage config query gui))))
+      '(kunabi-main kunabi-config kunabi-storage kunabi-parser
+        kunabi-loader kunabi-query kunabi-detection kunabi-billing))))
 
 (printf "[4/6] Embedding boot files + program as C headers...
 ")
@@ -113,7 +127,7 @@
   (unless (= 0 (system cmd))
     (display "Error: C compilation failed\n")
     (exit 1)))
-(let ((cmd (format "gcc -rdynamic -o kunabi kunabi-main.o -L~a -lkernel -llz4 -lz -lm -ldl -lpthread -luuid -lncurses -Wl,-rpath,~a"
+(let ((cmd (format "gcc -rdynamic -o gherkin-kunabi kunabi-main.o -L~a -lkernel -llz4 -lz -lm -ldl -lpthread -luuid -lncurses -Wl,-rpath,~a"
              chez-dir chez-dir)))
   (printf "  ~a~n" cmd)
   (unless (= 0 (system cmd))
@@ -136,4 +150,4 @@
 ")
 (printf "  Binary: ./kunabi  (~a KB)
 "
-  (quotient (file-length (open-file-input-port "kunabi")) 1024))
+  (quotient (file-length (open-file-input-port "gherkin-kunabi")) 1024))

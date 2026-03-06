@@ -11,4 +11,8 @@
   (ober kunabi-config)
   (ober kunabi-query)
   ;; (ober kunabi-gui) ;; needs Qt FFI
+  ;; Ensure compat modules compile for binary build
+  (compat process)
+  (clan db-leveldb)
+  (clan text-yaml)
 )
