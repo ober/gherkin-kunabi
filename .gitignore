@@ -7,16 +7,24 @@ kunabi
 kunabi_program.h
 kunabi-all.so
 
-# Auto-generated .sls files
+# Auto-generated .sls files (produced by gherkin translate from .ss sources)
 src/ober/kunabi.sls
 src/ober/older-kunabi.sls
 src/ober/kunabi-main.sls
+src/ober/kunabi-billing.sls
+src/ober/kunabi-config.sls
+src/ober/kunabi-detection.sls
+src/ober/kunabi-gui.sls
+src/ober/kunabi-gui-main.sls
+src/ober/kunabi-loader.sls
+src/ober/kunabi-parser.sls
+src/ober/kunabi-query.sls
+src/ober/kunabi-storage.sls
 src/ober/kunabi-vpc.sls
 src/ober/kunabi-sqlite.sls
 src/ober/kunabi-leveldb.sls
 src/ober/kunabi-cloudtrail.sls
 src/ober/build-binary.sls
-src/ober/kunabi.sls
 src/ober/main.sls
 src/ober/gui-main.sls
 src/ober/billing.sls
