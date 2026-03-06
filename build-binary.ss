@@ -88,15 +88,16 @@
 ;; (which uses load-shared-object "" instead of loading external .so files)
 ;; takes priority over the external chez-leveldb version.
 (parameterize ([compile-imported-libraries #t]
-               [library-directories (cons '("src" . "src") (library-directories))])
+               [library-directories (append '(("src" . "src")
+                                              ("gherkin-aws/src" . "gherkin-aws/src"))
+                                            (library-directories))])
   (compile-program "kunabi.ss"))
 
-(printf "[3/7] Using compiled program...
+(printf "[3/7] Creating boot file with libraries + program...
 ")
-(system "cp kunabi.so kunabi-all.so")
-
-(printf "[4/7] Creating libs-only boot file...
-")
+;; Include BOTH libraries and the program in the boot file.
+;; This avoids the need for Sscheme_script/memfd entirely.
+;; (Threading limitation noted in docs doesn't apply — kunabi doesn't use threads.)
 (apply make-boot-file "kunabi.boot" '("scheme" "petite")
   (append
     (list
@@ -132,12 +133,12 @@
       '(aws-creds s3-xml s3-api s3-objects))
     (map (lambda (m) (format "src/ober/~a.so" m))
       '(kunabi-main kunabi-config kunabi-storage kunabi-parser
-        kunabi-loader kunabi-query kunabi-detection kunabi-billing))))
+        kunabi-loader kunabi-query kunabi-detection kunabi-billing))
+    ;; Include the program itself in the boot file
+    (list "kunabi.so")))
 
-(printf "[5/7] Embedding boot files + program as C headers...
+(printf "[4/6] Embedding boot files as C headers...
 ")
-(file->c-header "kunabi-all.so" "kunabi_program.h"
-                "kunabi_program_data" "kunabi_program_size")
 (file->c-header (format "~a/petite.boot" chez-dir) "kunabi_petite_boot.h"
                 "petite_boot_data" "petite_boot_size")
 (file->c-header (format "~a/scheme.boot" chez-dir) "kunabi_scheme_boot.h"
@@ -145,7 +146,7 @@
 (file->c-header "kunabi.boot" "kunabi_app_boot.h"
                 "kunabi_app_boot_data" "kunabi_app_boot_size")
 
-(printf "[6/7] Compiling and linking...
+(printf "[5/6] Compiling and linking...
 ")
 (let ((cmd (format "gcc -c -O2 -o kunabi-main.o kunabi-main.c -I~a -I. -Wall 2>&1" chez-dir)))
   (printf "  ~a~n" cmd)
@@ -168,13 +169,13 @@
     (display "Error: Link failed\n")
     (exit 1)))
 
-(printf "[7/7] Cleaning up...
+(printf "[6/6] Cleaning up...
 ")
 (for-each (lambda (f)
             (when (file-exists? f) (delete-file f)))
-  '("kunabi-main.o" "leveldb_shim.o" "kunabi_program.h"
+  '("kunabi-main.o" "leveldb_shim.o"
     "kunabi_petite_boot.h" "kunabi_scheme_boot.h" "kunabi_app_boot.h"
-    "kunabi-all.so" "kunabi.so" "kunabi.wpo" "kunabi.boot"))
+    "kunabi.so" "kunabi.wpo" "kunabi.boot"))
 
 (printf "
 ========================================
