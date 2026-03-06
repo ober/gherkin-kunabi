@@ -42,7 +42,8 @@ run: all
 	$(SCHEME) -q --libdirs $(LIBDIRS) --program kunabi.ss
 
 clean:
-	rm -f kunabi-main.o kunabi_program.h
+	rm -f kunabi-main.o leveldb_shim.o kunabi_program.h
+	rm -f kunabi_petite_boot.h kunabi_scheme_boot.h kunabi_app_boot.h
 	rm -f kunabi.boot kunabi-all.so kunabi.so kunabi.wpo
 	rm -f petite.boot scheme.boot
 	find src -name '*.so' -o -name '*.wpo' | xargs rm -f 2>/dev/null || true

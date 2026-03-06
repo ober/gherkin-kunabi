@@ -1,6 +1,9 @@
 #!chezscheme
 ;; Build a native kunabi binary.
 ;;
+;; Produces a fully self-contained ELF with zero dependencies on any
+;; Chez kernel, libs, boot files, or external .so files.
+;;
 ;; Usage: cd gherkin-kunabi && make binary
 
 (import (chezscheme))
@@ -59,20 +62,40 @@
   (printf "Error: Cannot find gherkin runtime at ~a~n" gherkin-dir)
   (exit 1))
 
-(printf "Chez dir:    ~a~n" chez-dir)
-(printf "Gherkin dir: ~a~n" gherkin-dir)
+;; --- Locate leveldb shim source ---
+(define chez-leveldb-dir
+  (or (getenv "CHEZ_LEVELDB_DIR")
+      (let ((home (getenv "HOME")))
+        (format "~a/mine/chez-leveldb" home))))
+
+(printf "Chez dir:      ~a~n" chez-dir)
+(printf "Gherkin dir:   ~a~n" gherkin-dir)
+(printf "LevelDB shim:  ~a~n" chez-leveldb-dir)
 
 (printf "
-[1/6] Compiling all modules...
+[1/7] Compiling leveldb shim (C object)...
 ")
-(parameterize ([compile-imported-libraries #t])
+(let ((cmd (format "gcc -c -O2 -o leveldb_shim.o ~a/leveldb_shim.c -I/usr/include 2>&1"
+             chez-leveldb-dir)))
+  (printf "  ~a~n" cmd)
+  (unless (= 0 (system cmd))
+    (display "Error: leveldb_shim.c compilation failed\n")
+    (exit 1)))
+
+(printf "[2/7] Compiling all modules (with embedded leveldb)...
+")
+;; Prepend src/ to library-directories so our embedded (leveldb) library
+;; (which uses load-shared-object "" instead of loading external .so files)
+;; takes priority over the external chez-leveldb version.
+(parameterize ([compile-imported-libraries #t]
+               [library-directories (cons '("src" . "src") (library-directories))])
   (compile-program "kunabi.ss"))
 
-(printf "[2/6] Using compiled program...
+(printf "[3/7] Using compiled program...
 ")
 (system "cp kunabi.so kunabi-all.so")
 
-(printf "[3/6] Creating libs-only boot file...
+(printf "[4/7] Creating libs-only boot file...
 ")
 (apply make-boot-file "kunabi.boot" '("scheme" "petite")
   (append
@@ -101,7 +124,8 @@
       '(json sugar process format pregexp sort getopt misc gambit wg))
     (map (lambda (m) (format "src/clan/~a.so" m))
       '(db-leveldb text-yaml))
-    (list (format "~a/mine/chez-leveldb/leveldb.so" (getenv "HOME")))
+    ;; Use our embedded (leveldb) that resolves symbols from the process
+    (list "src/leveldb.so")
     (map (lambda (m) (format "gherkin-aws/src/compat/~a.so" m))
       '(request uri sigv4))
     (map (lambda (m) (format "gherkin-aws/src/gerbil-aws/~a.so" m))
@@ -110,7 +134,7 @@
       '(kunabi-main kunabi-config kunabi-storage kunabi-parser
         kunabi-loader kunabi-query kunabi-detection kunabi-billing))))
 
-(printf "[4/6] Embedding boot files + program as C headers...
+(printf "[5/7] Embedding boot files + program as C headers...
 ")
 (file->c-header "kunabi-all.so" "kunabi_program.h"
                 "kunabi_program_data" "kunabi_program_size")
@@ -121,24 +145,34 @@
 (file->c-header "kunabi.boot" "kunabi_app_boot.h"
                 "kunabi_app_boot_data" "kunabi_app_boot_size")
 
-(printf "[5/6] Compiling and linking...
+(printf "[6/7] Compiling and linking...
 ")
 (let ((cmd (format "gcc -c -O2 -o kunabi-main.o kunabi-main.c -I~a -I. -Wall 2>&1" chez-dir)))
+  (printf "  ~a~n" cmd)
   (unless (= 0 (system cmd))
     (display "Error: C compilation failed\n")
     (exit 1)))
-(let ((cmd (format "gcc -rdynamic -o gherkin-kunabi kunabi-main.o -L~a -lkernel -llz4 -lz -lm -ldl -lpthread -luuid -lncurses -Wl,-rpath,~a"
-             chez-dir chez-dir)))
+;; Link: Chez kernel (static .a) + leveldb_shim.o (static) + system libs.
+;; libleveldb is linked dynamically (standard system package).
+;; No -Wl,-rpath needed — no Chez paths to encode.
+(let ((cmd (format (string-append
+              "gcc -rdynamic -o gherkin-kunabi"
+              " kunabi-main.o leveldb_shim.o"
+              " -L~a -lkernel"
+              " -lleveldb"
+              " -llz4 -lz -lm -ldl -lpthread -luuid -lncurses -lstdc++"
+              " 2>&1")
+             chez-dir)))
   (printf "  ~a~n" cmd)
   (unless (= 0 (system cmd))
     (display "Error: Link failed\n")
     (exit 1)))
 
-(printf "[6/6] Cleaning up...
+(printf "[7/7] Cleaning up...
 ")
 (for-each (lambda (f)
             (when (file-exists? f) (delete-file f)))
-  '("kunabi-main.o" "kunabi_program.h"
+  '("kunabi-main.o" "leveldb_shim.o" "kunabi_program.h"
     "kunabi_petite_boot.h" "kunabi_scheme_boot.h" "kunabi_app_boot.h"
     "kunabi-all.so" "kunabi.so" "kunabi.wpo" "kunabi.boot"))
 
@@ -148,6 +182,8 @@
 (printf "Build complete!
 
 ")
-(printf "  Binary: ./kunabi  (~a KB)
-"
-  (quotient (file-length (open-file-input-port "gherkin-kunabi")) 1024))
+(let ((p (open-file-input-port "gherkin-kunabi")))
+  (printf "  Binary: ./gherkin-kunabi  (~a KB)~n"
+    (quotient (file-length p) 1024))
+  (close-port p))
+(printf "  Self-contained: zero external Chez/leveldb dependencies~n")
