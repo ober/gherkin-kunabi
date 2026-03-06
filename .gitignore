@@ -36,5 +36,9 @@ src/ober/config.sls
 src/ober/query.sls
 src/ober/gui.sls
 
+# Runtime data
+cloudtrail.db/
+*.bak
+
 # Cache
 .gerbil-lsp-cache/

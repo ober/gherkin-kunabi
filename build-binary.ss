@@ -68,13 +68,22 @@
       (let ((home (getenv "HOME")))
         (format "~a/mine/chez-leveldb" home))))
 
+;; --- Locate chez-ssl and chez-zlib ---
+(define home (getenv "HOME"))
+(define chez-ssl-dir (format "~a/mine/chez-ssl" home))
+(define chez-https-dir (format "~a/mine/chez-https" home))
+(define chez-zlib-dir (format "~a/mine/chez-zlib" home))
+
 (printf "Chez dir:      ~a~n" chez-dir)
 (printf "Gherkin dir:   ~a~n" gherkin-dir)
 (printf "LevelDB shim:  ~a~n" chez-leveldb-dir)
+(printf "SSL shim:      ~a~n" chez-ssl-dir)
+(printf "Zlib shim:     ~a~n" chez-zlib-dir)
 
 (printf "
-[1/7] Compiling leveldb shim (C object)...
+[1/7] Compiling C shims (leveldb, ssl, zlib)...
 ")
+;; LevelDB shim
 (let ((cmd (format "gcc -c -O2 -o leveldb_shim.o ~a/leveldb_shim.c -I/usr/include 2>&1"
              chez-leveldb-dir)))
   (printf "  ~a~n" cmd)
@@ -82,14 +91,34 @@
     (display "Error: leveldb_shim.c compilation failed\n")
     (exit 1)))
 
-(printf "[2/7] Compiling all modules (with embedded leveldb)...
+;; SSL shim
+(let ((cmd (format "gcc -c -O2 -o chez_ssl_shim.o ~a/chez_ssl_shim.c -I/usr/include 2>&1"
+             chez-ssl-dir)))
+  (printf "  ~a~n" cmd)
+  (unless (= 0 (system cmd))
+    (display "Error: chez_ssl_shim.c compilation failed\n")
+    (exit 1)))
+
+;; Zlib shim
+(let ((cmd (format "gcc -c -O2 -o chez_zlib_shim.o ~a/chez_zlib_shim.c -I/usr/include 2>&1"
+             chez-zlib-dir)))
+  (printf "  ~a~n" cmd)
+  (unless (= 0 (system cmd))
+    (display "Error: chez_zlib_shim.c compilation failed\n")
+    (exit 1)))
+
+(printf "[2/7] Compiling all modules...
 ")
 ;; Prepend src/ to library-directories so our embedded (leveldb) library
 ;; (which uses load-shared-object "" instead of loading external .so files)
 ;; takes priority over the external chez-leveldb version.
+;; Also include chez-ssl, chez-https, chez-zlib source dirs.
 (parameterize ([compile-imported-libraries #t]
-               [library-directories (append '(("src" . "src")
-                                              ("gherkin-aws/src" . "gherkin-aws/src"))
+               [library-directories (append (list
+                                              '("src" . "src")
+                                              '("gherkin-aws/src" . "gherkin-aws/src")
+                                              (cons gherkin-dir gherkin-dir)
+                                              (cons chez-leveldb-dir chez-leveldb-dir))
                                             (library-directories))])
   (compile-program "kunabi.ss"))
 
@@ -97,7 +126,6 @@
 ")
 ;; Include BOTH libraries and the program in the boot file.
 ;; This avoids the need for Sscheme_script/memfd entirely.
-;; (Threading limitation noted in docs doesn't apply — kunabi doesn't use threads.)
 (apply make-boot-file "kunabi.boot" '("scheme" "petite")
   (append
     (list
@@ -121,6 +149,8 @@
       (format "~a/compat/std-text-base64.so" gherkin-dir)
       (format "~a/compat/std-crypto-digest.so" gherkin-dir)
     )
+    ;; chez-ssl, chez-https, chez-zlib (local copies in src/)
+    (list "src/chez-ssl.so" "src/chez-https.so" "src/chez-zlib.so")
     (map (lambda (m) (format "src/compat/~a.so" m))
       '(json sugar process format pregexp sort getopt misc gambit wg))
     (map (lambda (m) (format "src/clan/~a.so" m))
@@ -137,7 +167,7 @@
     ;; Include the program itself in the boot file
     (list "kunabi.so")))
 
-(printf "[4/6] Embedding boot files as C headers...
+(printf "[4/7] Embedding boot files as C headers...
 ")
 (file->c-header (format "~a/petite.boot" chez-dir) "kunabi_petite_boot.h"
                 "petite_boot_data" "petite_boot_size")
@@ -146,21 +176,20 @@
 (file->c-header "kunabi.boot" "kunabi_app_boot.h"
                 "kunabi_app_boot_data" "kunabi_app_boot_size")
 
-(printf "[5/6] Compiling and linking...
+(printf "[5/7] Compiling and linking...
 ")
 (let ((cmd (format "gcc -c -O2 -o kunabi-main.o kunabi-main.c -I~a -I. -Wall 2>&1" chez-dir)))
   (printf "  ~a~n" cmd)
   (unless (= 0 (system cmd))
     (display "Error: C compilation failed\n")
     (exit 1)))
-;; Link: Chez kernel (static .a) + leveldb_shim.o (static) + system libs.
-;; libleveldb is linked dynamically (standard system package).
-;; No -Wl,-rpath needed — no Chez paths to encode.
+;; Link: Chez kernel (static .a) + C shims + system libs.
+;; Now includes chez_ssl_shim.o and chez_zlib_shim.o for native HTTPS and gzip.
 (let ((cmd (format (string-append
               "gcc -rdynamic -o gherkin-kunabi"
-              " kunabi-main.o leveldb_shim.o"
+              " kunabi-main.o leveldb_shim.o chez_ssl_shim.o chez_zlib_shim.o"
               " -L~a -lkernel"
-              " -lleveldb"
+              " -lleveldb -lssl -lcrypto"
               " -llz4 -lz -lm -ldl -lpthread -luuid -lncurses -lstdc++"
               " 2>&1")
              chez-dir)))
@@ -169,11 +198,11 @@
     (display "Error: Link failed\n")
     (exit 1)))
 
-(printf "[6/6] Cleaning up...
+(printf "[6/7] Cleaning up...
 ")
 (for-each (lambda (f)
             (when (file-exists? f) (delete-file f)))
-  '("kunabi-main.o" "leveldb_shim.o"
+  '("kunabi-main.o" "leveldb_shim.o" "chez_ssl_shim.o" "chez_zlib_shim.o"
     "kunabi_petite_boot.h" "kunabi_scheme_boot.h" "kunabi_app_boot.h"
     "kunabi.so" "kunabi.wpo" "kunabi.boot"))
 
@@ -187,4 +216,4 @@
   (printf "  Binary: ./gherkin-kunabi  (~a KB)~n"
     (quotient (file-length p) 1024))
   (close-port p))
-(printf "  Self-contained: zero external Chez/leveldb dependencies~n")
+(printf "  Self-contained: native HTTPS + gzip, no curl subprocess~n")
