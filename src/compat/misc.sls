@@ -139,10 +139,17 @@
 
   ;; --- path utilities ---
 
-  (define (path-expand path)
-    (if (and (> (string-length path) 0) (char=? (string-ref path 0) #\/))
-      path
-      (string-append (current-directory) "/" path)))
+  (define (path-expand path . rest)
+    (let ((base (if (pair? rest) (car rest) (current-directory))))
+      (cond
+        ((and (> (string-length path) 0)
+              (char=? (string-ref path 0) #\~))
+         (string-append (getenv "HOME")
+                        (substring path 1 (string-length path))))
+        ((and (> (string-length path) 0)
+              (char=? (string-ref path 0) #\/))
+         path)
+        (else (string-append base "/" path)))))
 
   (define (path-directory path)
     (let ((idx (let loop ((i (- (string-length path) 1)))
