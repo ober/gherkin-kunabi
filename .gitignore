@@ -1,0 +1,32 @@
+# Build artifacts
+*.so
+*.wpo
+*.o
+*.boot
+kunabi
+kunabi_program.h
+kunabi-all.so
+
+# Auto-generated .sls files
+src/ober/kunabi.sls
+src/ober/older-kunabi.sls
+src/ober/kunabi-main.sls
+src/ober/kunabi-vpc.sls
+src/ober/kunabi-sqlite.sls
+src/ober/kunabi-leveldb.sls
+src/ober/kunabi-cloudtrail.sls
+src/ober/build-binary.sls
+src/ober/kunabi.sls
+src/ober/main.sls
+src/ober/gui-main.sls
+src/ober/billing.sls
+src/ober/loader.sls
+src/ober/parser.sls
+src/ober/detection.sls
+src/ober/storage.sls
+src/ober/config.sls
+src/ober/query.sls
+src/ober/gui.sls
+
+# Cache
+.gerbil-lsp-cache/

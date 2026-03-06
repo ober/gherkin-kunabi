@@ -1,0 +1,6 @@
+[submodule "kunabi"]
+	path = kunabi
+	url = https://github.com/ober/kunabi.git
+[submodule "gherkin-aws"]
+	path = gherkin-aws
+	url = https://github.com/ober/gherkin-aws.git
