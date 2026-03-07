@@ -26,6 +26,8 @@ gherkin:
 	@# kunabi-loader: add wg and chez-zlib imports
 	@sed -i '/(gerbil-aws s3-api)/a\    (compat wg)' src/ober/kunabi-loader.sls 2>/dev/null || true
 	@sed -i '/(gerbil-aws s3-api)/a\    (chez-zlib)' src/ober/kunabi-loader.sls 2>/dev/null || true
+	@# kunabi-loader: remove S3Client-close! calls (not available in compat layer)
+	@sed -i '/S3Client-close!/d' src/ober/kunabi-loader.sls 2>/dev/null || true
 	@# kunabi-loader: use native gzip decompression in download-and-parse
 	@sed -i '/define (download-and-parse/,/records)))/c\  (define (download-and-parse client bucket-name key compact?)\n    (let* ([raw (get-object client bucket-name key)]\n           [data (if (gzip-data? raw)\n                     (utf8->string (gunzip-bytevector raw))\n                     (if (bytevector? raw)\n                         (utf8->string raw)\n                         raw))]\n           [records (parse-cloudtrail data)])\n      (if compact?\n          (map strip-response-elements records)\n          records))))' src/ober/kunabi-loader.sls 2>/dev/null || true
 	@# kunabi-main: show help when no arguments are passed
